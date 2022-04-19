@@ -1,0 +1,208 @@
+---
+title: "Final Project"
+author: "Qianhui Ni and Wani Qiu"
+date: "4/7/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r include=FALSE}
+library(here)
+library(magrittr) # for the `%>%` operator
+library(rstan)
+rstan_options(auto_write = TRUE) # save compiled STAN object
+library(posterior)
+library(bayesplot)
+library(brms)  # simplify fitting Stan GLM models
+library(modelsummary)  # table for brms
+theme_set(theme_classic() +
+theme(panel.grid.major.y = element_line(color = "grey92")))
+```
+
+
+## Research Question
+
+Do children differentiate the complexity of the information they teach based on the maturity of the audience?
+
+## Description of each variable in our preliminary analysis
+
+Age: five-years-old and seven-years-old
+
+Response: basic or complex information
+
+Trials: number of trials per participant
+
+
+##  Model and the priors  
+
+### Model:  
+
+$$
+  \begin{aligned}
+    z_j^A & \sim \mathrm{Bin}(N_j^A, \theta_j^A) \\
+    z_j^B & \sim \mathrm{Bin}(N_j^B, \theta_j^B) \\
+    \theta_j^A & \sim \mathrm{Beta2}(\mu, \kappa) \\
+    \theta_j^B & =\Phi(q_j) \\
+    q_j & = \Phi^{-1}(\theta_j^A) + \delta_j \\
+    \delta_j & \sim N(\mu_{\delta}, \tau_{\delta})
+  \end{aligned}
+$$
+
+### Prior:
+
+$$
+\begin{aligned}
+ \mu & \sim \mathrm{Beta}(2,2) \\
+ \kappa & \sim \mathrm{Gamma}(0.01,0.01)\\
+ \mu_{\delta} & \sim N(0,1) \\
+ \tau_{\delta} & \sim N(0,1)
+\end{aligned}
+$$
+$j$:subject (subject 1, 2, ..., 68)  
+
+$\theta_j$: individual subject's prob of transmitting complex info
+
+$N_j$:the number of trails
+
+
+```{r echo=FALSE}
+#Import data
+alldata <- read.csv('Bayes_Project_data.csv')
+
+five <- subset(alldata, Age.Group==5)
+seven <- subset(alldata, Age.Group==7)
+
+```
+
+# 5-year-olds
+
+```{r include=FALSE}
+five_ntrial_adu <- five$Atrial
+five_Acomplex <- five$Acomplex
+five_ntrial_baby <- five$Btrial
+five_Bcomplex <- five$Bcomplex
+fit1 <- stan(
+  file = here("hierarchical_bern_within_study.stan"),
+  data = list(J = 34, yc = five_Acomplex, Nc = five_ntrial_adu,
+  yt = five_Bcomplex, Nt = five_ntrial_baby),
+  seed = 1234, # for reproducibility
+  iter = 4000,
+  cores = 4,
+  control = list(adapt_delta = 0.99, max_treedepth = 12)
+)
+```
+## Convergence Check for 5yos
+
+```{r echo=FALSE, fig.height=10}
+mcmc_intervals(fit1,
+               regex_pars = "theta")
+```
+
+### Trace plots of key parameters
+```{r echo=FALSE}
+
+mcmc_trace(fit1, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+
+### Rank histograms of key parameters
+```{r echo=FALSE}
+mcmc_rank_hist(fit1, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+
+### Posterior distribution of key model parameter mu:
+```{r echo=FALSE}
+mcmc_dens(fit1, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+### Table of the posterior distributions of key parameters
+
+```{r echo=FALSE}
+fit1%>%
+as_draws() %>%
+  summarize_draws() %>%
+  knitr::kable(digits=2)
+```
+
+From the trace plots and the rank histograms, it seems like there is good mixing of the 4 chains as they frequently cross each other. The histograms for the four chains have similar average ranks and are roughly uniform, which also suggests good mixing. The ess_bulk for all of the key parameters is larger than 1000, and the rhat value for all key parameters are less than 1.01.  
+
+## 7-year-olds
+```{r message=FALSE, warning=FALSE, include=FALSE}
+seven_ntrial_adu <- seven$Atrial
+seven_Acomplex <- seven$Acomplex
+seven_ntrial_baby <- seven$Btrial
+seven_Bcomplex <- seven$Bcomplex
+fit2 <- stan(
+  file = here("hierarchical_bern_within_study.stan"),
+  data = list(J = 34, yc = seven_Acomplex, Nc = seven_ntrial_adu,
+  yt = seven_Bcomplex, Nt = seven_ntrial_baby),
+  seed = 1234, # for reproducibility
+  iter = 4000,
+  cores = 4,
+  control = list(adapt_delta = 0.99, max_treedepth = 12)
+)
+
+fit2
+
+```
+
+
+### Convergence Check for 7yos
+
+```{r echo=FALSE, fig.height=10}
+mcmc_intervals(fit2,
+               regex_pars = "theta")
+```
+
+
+### Trace plots of key parameters
+```{r echo=FALSE}
+#trace plot of key parameter mu
+mcmc_trace(fit2, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+
+### Rank histograms of key parameters
+```{r echo=FALSE}
+mcmc_rank_hist(fit2, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+
+### Posterior distribution of key model parameter mu:
+```{r echo=FALSE}
+mcmc_dens(fit2, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+```
+
+### Table of the posterior distributions of key parameters
+
+```{r echo=FALSE}
+fit2%>%
+as_draws() %>%
+  summarize_draws() %>%
+  knitr::kable(digits=2)
+```
+
+From the trace plots and the rank histograms, it seems like there is good mixing of the 4 chains as they frequently cross each other. The histograms for the four chains have similar average ranks and are roughly uniform, which also suggests good mixing. The ess_bulk for all of the key parameters is larger than 1000, and the rhat value for all key parameters are less than 1.01.  
+
+## Interpretation of Results
+
+### Within-Group Comparisons
+
+#### 5-year-olds
+
+When teaching an adult, 5-year-olds were equally likely to teach basic and complex information. The estimated difference in probability is -0.09, 90% CI[-0.23, 0.04]. When teaching a baby, 5-year-olds were also equally likely to teach basic and complex information. The estimated difference in probability is -0.16, 90% CI[-0.32, 0.01]. 
+
+The estimated probability for 5-year-olds teaching complex information to the adult is 0.45, 90% CI [0.38, 0.52]. Since this interval includes 0.5, it indicates that they are teaching complex information to the adult at chance. The estimated probability for 5-year-olds teaching basic information to the baby is 0.58, 90% CI [0.49, 0.66]. Since this interval includes 0.5, it indicates that they are also teaching basic information to the baby at chance. 
+
+#### 7-year-olds
+When teaching an adult, 7-year-olds were more likely to teach complex information than basic information. The estimated difference in probability is 0.23, 90% CI[0.08, 0.37]. When teaching a baby, 7-year-olds were equally likely to teach basic and complex information. The estimated difference in probability is -0.13, 90% CI[-0.39, 0.13]. 
+
+The estimated probability for 7-year-olds teaching complex information to the adult is 0.61, 90% CI [0.54, 0.69]. Since this interval does not include 0.5, it indicates that they are teaching complex information to the adult above chance. The estimated probability for 7-year-olds teaching basic information to the baby is 0.57, 90% CI [0.43, 0.69]. Since this interval includes 0.5, it indicates that they are teaching basic information to the baby at chance. 
+
+#### Age Group Comparisons
+
+From the posterior distributions, it seems like 7-year-olds are better than 5-year-olds at teaching complex information to the adult. The mean amount of complex information taught to adults for 7-year-olds is 0.61, 90% CI [0.54, 0.69], whereas the mean amount of complex information taught to adults for 5-year-olds is 0.45, 90% CI[0.38, 0.52]. However, there does not seem to be an age difference in the probability of basic information taught to the baby audience. The estimated probability of 7-year-olds teaching basic information to the baby is 0.57, 90% CI [0.43, 0.69]. Similarly, the estimated probability of 5-year-olds teaching basic information to the baby is 0.58, 90% CI [0.49. 0.66].
+
+This indicates that compared to 5-year-olds, 7-year-olds are significantly better at teaching complex information to the adult. On the other hand, 7-year-olds and 5-year-olds were similar in their probability of teaching basic information to the baby.
