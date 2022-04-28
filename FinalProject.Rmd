@@ -94,7 +94,7 @@ fit1 <- stan(
 ```
 ## Convergence Check for 5yos
 
-```{r echo=FALSE, fig.height=10}
+```{r fig.height=10, include=FALSE}
 mcmc_intervals(fit1,
                regex_pars = "theta")
 ```
@@ -114,7 +114,7 @@ mcmc_rank_hist(fit1, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_bab
 
 ### Posterior distribution of key model parameter mu:
 ```{r echo=FALSE}
-mcmc_dens(fit1, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+mcmc_dens(fit1, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic","mu_baby_diff_basic_complex", "mu_adult_diff_basic_complex"))
 ```
 
 ### Table of the posterior distributions of key parameters
@@ -122,6 +122,7 @@ mcmc_dens(fit1, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic
 ```{r echo=FALSE}
 fit1%>%
 as_draws() %>%
+  subset_draws(variable = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic", "mu_baby_diff_basic_complex", "mu_adult_diff_basic_complex")) %>%
   summarize_draws() %>%
   knitr::kable(digits=2)
 ```
@@ -172,7 +173,7 @@ mcmc_rank_hist(fit2, pars = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_bab
 
 ### Posterior distribution of key model parameter mu:
 ```{r echo=FALSE}
-mcmc_dens(fit2, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic"))
+mcmc_dens(fit2, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic","mu_baby_diff_basic_complex", "mu_adult_diff_basic_complex"))
 ```
 
 ### Table of the posterior distributions of key parameters
@@ -180,11 +181,78 @@ mcmc_dens(fit2, pars=c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic
 ```{r echo=FALSE}
 fit2%>%
 as_draws() %>%
-  summarize_draws() %>%
+  subset_draws(variable = c("mu", "mu_adult_basic", "mu_baby_complex", "mu_baby_basic", "mu_baby_diff_basic_complex", "mu_adult_diff_basic_complex")) %>%
+    summarize_draws() %>%
   knitr::kable(digits=2)
 ```
 
 From the trace plots and the rank histograms, it seems like there is good mixing of the 4 chains as they frequently cross each other. The histograms for the four chains have similar average ranks and are roughly uniform, which also suggests good mixing. The ess_bulk for all of the key parameters is larger than 1000, and the rhat value for all key parameters are less than 1.01.  
+
+
+
+```{r}
+post_mu_five <- rstan::extract(fit1, pars = "mu")$mu
+post_mu_seven <- rstan::extract(fit2, pars = "mu")$mu
+# Compute the difference
+dmu_seven_minus_five <- post_mu_seven - post_mu_five
+# Summary
+posterior::summarise_draws(
+list(adult_dmu = dmu_seven_minus_five)
+)%>%
+  knitr::kable(digits=2)
+mcmc_dens(as_draws_array(list(adult_dmu=dmu_seven_minus_five)))
+```
+```{r}
+post_mu_bfive <- rstan::extract(fit1, pars = "mu_baby_basic")$mu_baby_basic
+post_mu_bseven <- rstan::extract(fit2, pars = "mu_baby_basic")$mu_baby_basic
+# Compute the difference
+bdmu_seven_minus_five <- post_mu_bseven - post_mu_bfive
+# Summary
+posterior::summarise_draws(
+list(baby_dmu = bdmu_seven_minus_five)
+)%>%
+  knitr::kable(digits=2)
+mcmc_dens(as_draws_array(list(baby_dmu=bdmu_seven_minus_five)))
+```
+
+```{r echo=FALSE}
+y1_tilde <- rstan::extract(fit1, pars = "ytrep")$ytrep
+y2_tilde <- rstan::extract(fit2, pars = "ycrep")$ycrep
+selected_rows <- sample.int(nrow(y1_tilde), size = 10)
+selected_rows2 <- sample.int(nrow(y2_tilde), size = 10)
+ppc_intervals(seven$Acomplex - five$Acomplex,
+                 yrep = y2_tilde[selected_rows2,] - y1_tilde[selected_rows,],
+                 bw = "SJ")
+ppc_intervals(five$Acomplex,
+                 yrep = y1_tilde[selected_rows, ],
+                 bw = "SJ")
+
+ppc_intervals(seven$Acomplex,
+                 yrep = y2_tilde[selected_rows2, ],
+                 bw = "SJ")
+
+
+
+#check for proportion of outliers
+prop_outliers <- function(x) {
+  length(boxplot.stats(x)$out)
+}
+ppc_stat(
+  five$Acomplex,
+  yrep = y1_tilde,
+  stat = prop_outliers
+)
+
+prop_outliers <- function(x) {
+  length(boxplot.stats(x)$out)
+}
+ppc_stat(
+  seven$Acomplex,
+  yrep = y2_tilde,
+  stat = prop_outliers
+)
+
+```
 
 ## Interpretation of Results
 
@@ -192,17 +260,25 @@ From the trace plots and the rank histograms, it seems like there is good mixing
 
 #### 5-year-olds
 
-When teaching an adult, 5-year-olds were equally likely to teach basic and complex information. The estimated difference in probability is -0.09, 90% CI[-0.23, 0.04]. When teaching a baby, 5-year-olds were also equally likely to teach basic and complex information. The estimated difference in probability is -0.16, 90% CI[-0.32, 0.01]. 
+When teaching an adult, 5-year-olds were not reliably different from zero, therefore, we don’t have sufficient statistical evidence for them teaching more complex information than basic information. The estimated difference in probability is -0.09, 90% CI[-0.23, 0.04]. When teaching a baby,  5-year-olds’ selective teaching was not reliably different from zero, therefore, we don’t have sufficient statistical evidence for them choosing more basic information than complex information. The estimated difference in probability is -0.16, 90% CI[-0.32, 0.01]. 
 
 The estimated probability for 5-year-olds teaching complex information to the adult is 0.45, 90% CI [0.38, 0.52]. Since this interval includes 0.5, it indicates that they are teaching complex information to the adult at chance. The estimated probability for 5-year-olds teaching basic information to the baby is 0.58, 90% CI [0.49, 0.66]. Since this interval includes 0.5, it indicates that they are also teaching basic information to the baby at chance. 
 
+
 #### 7-year-olds
-When teaching an adult, 7-year-olds were more likely to teach complex information than basic information. The estimated difference in probability is 0.23, 90% CI[0.08, 0.37]. When teaching a baby, 7-year-olds were equally likely to teach basic and complex information. The estimated difference in probability is -0.13, 90% CI[-0.39, 0.13]. 
+
+When teaching an adult, 7-year-olds were more likely to teach complex information than basic information. The estimated difference in probability is 0.23, 90% CI[0.08, 0.37]. When teaching a baby, 7-year-olds’ selective teaching was not reliably different from zero, therefore, we don’t have sufficient statistical evidence for them choosing more basic information than complex information. The estimated difference in probability is -0.13, 90% CI[-0.39, 0.13]. 
 
 The estimated probability for 7-year-olds teaching complex information to the adult is 0.61, 90% CI [0.54, 0.69]. Since this interval does not include 0.5, it indicates that they are teaching complex information to the adult above chance. The estimated probability for 7-year-olds teaching basic information to the baby is 0.57, 90% CI [0.43, 0.69]. Since this interval includes 0.5, it indicates that they are teaching basic information to the baby at chance. 
 
+
 #### Age Group Comparisons
+
 
 From the posterior distributions, it seems like 7-year-olds are better than 5-year-olds at teaching complex information to the adult. The mean amount of complex information taught to adults for 7-year-olds is 0.61, 90% CI [0.54, 0.69], whereas the mean amount of complex information taught to adults for 5-year-olds is 0.45, 90% CI[0.38, 0.52]. However, there does not seem to be an age difference in the probability of basic information taught to the baby audience. The estimated probability of 7-year-olds teaching basic information to the baby is 0.57, 90% CI [0.43, 0.69]. Similarly, the estimated probability of 5-year-olds teaching basic information to the baby is 0.58, 90% CI [0.49. 0.66].
 
 This indicates that compared to 5-year-olds, 7-year-olds are significantly better at teaching complex information to the adult. On the other hand, 7-year-olds and 5-year-olds were similar in their probability of teaching basic information to the baby.
+
+#### Model Fit
+
+From the posterior predictive check, it does not seem like the model is a great fit for the data, as there are about 15 data points that are outside of the predicted values range. We think this may be due to the fact that there are a lot of individual differences in our observed data. 
